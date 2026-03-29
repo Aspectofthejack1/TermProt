@@ -1,29 +1,42 @@
-# TermProt (ProfileBackup) — Vencord Plugin
+# TermProt / ProfileBackup
 
-Insurance against Discord account termination. Automatically backs up your entire profile so you can restore it on a new account in one click.
+`ProfileBackup` is a Vencord user plugin that backs up key Discord profile data and helps you migrate it to another account.
 
-## What Gets Backed Up
+It is built for recovery and convenience: keep your profile details, favorite GIFs, and account organization data in a backup file you control.
 
-| Data | Auto-Restore | Notes |
-|------|-------------|-------|
-| Bio / About Me | Yes | |
-| Pronouns | Yes | |
-| Avatar (profile pic) | Yes | Saved as full image, not just a link |
-| Banner & accent color | Yes | |
-| Custom status | Yes | |
-| Favorite GIFs | Yes | Preserved in correct order |
-| Priority servers | Yes | Right-click a server and toggle priority tag |
-| Best friends | Yes | Right-click a friend and toggle best-friend tag |
-| Friends list | Partial | Sends friend requests — they still need to accept |
-| Server list | Partial | Creates permanent invite links — some servers may need manual rejoin |
+## What It Backs Up
 
-## Installation (Windows)
+| Item | Backup | Restore | Notes |
+|---|---|---|---|
+| Bio / About Me | Yes | Yes | |
+| Pronouns | Yes | Yes | |
+| Avatar | Yes | Yes | Stored as base64 in the backup |
+| Banner | Yes | Yes | Stored as base64 in the backup |
+| Accent color | Yes | Yes | |
+| Custom status | Yes | Yes | |
+| Favorite GIFs | Yes | Yes | Restores with multiple fallback methods |
+| Friends list | Yes | No direct re-add | Used for restore-server reference list |
+| Servers + invite codes | Yes | No direct auto-join | Uses cached per-guild invite codes when possible |
+| Priority server tags | Yes | N/A | Manual tags for organization |
+| Best friend tags | Yes | N/A | Manual tags for organization |
 
-You need: [Node.js](https://nodejs.org) (LTS), [Git](https://git-scm.com/download/win), and a terminal (PowerShell works).
+## How Restore Works
 
-### Fresh install (never built Vencord from source)
+There are two restore paths in the plugin:
 
-Open PowerShell and paste this whole block:
+- **Apply Restore**: restores profile fields, custom status, and favorite GIFs.
+- **Create Restore Server**: creates a helper server with channels containing your saved server invites and friend mention lists.
+
+It does **not** automatically send friend requests or auto-join every server.
+
+## Install (Vencord Source Build)
+
+Prerequisites:
+- [Node.js LTS](https://nodejs.org/)
+- [Git](https://git-scm.com/)
+- [pnpm](https://pnpm.io/)
+
+### Fresh Vencord setup
 
 ```powershell
 cd ~
@@ -36,9 +49,7 @@ pnpm build
 pnpm inject
 ```
 
-### Already have Vencord from source
-
-Open PowerShell, go to your Vencord folder, and paste:
+### If you already have Vencord
 
 ```powershell
 cd C:\Users\YOUR_USERNAME\Vencord
@@ -47,39 +58,59 @@ pnpm build
 pnpm inject
 ```
 
-## Add this plugin to your existing Vencord
+### Enable plugin
 
-If you already have Vencord installed and just want to add this plugin:
+1. Restart Discord.
+2. Open `Settings -> Vencord -> Plugins`.
+3. Search for `ProfileBackup`.
+4. Enable it.
 
-```powershell
-cd C:\Users\YOUR_USERNAME\Vencord\src\userplugins
-git clone https://github.com/Aspectofthejack1/TermProt.git ProfileBackup
-cd C:\Users\YOUR_USERNAME\Vencord
-pnpm build
-pnpm inject
-```
+## Usage
 
-### Enable the plugin
+Open the gear icon next to `ProfileBackup` in Vencord's plugin list.
 
-1. Restart Discord
-2. Go to **Settings > Vencord > Plugins**
-3. Search **ProfileBackup**
-4. Toggle it on
+- **Backup Now**: creates and saves a backup in Vencord DataStore.
+- **Export to File**: downloads a `.json` backup file.
+- **Restore from File**: loads a backup file and lets you choose what to apply.
+- **Restore from Last Auto-Backup**: loads the most recent DataStore backup.
+- **Create Restore Server**: creates a Discord server with:
+  - `priority-servers`
+  - `best-friends`
+  - `servers`
+  - `friends`
 
-## Updating the plugin
+## Auto-Backup
+
+Auto-backup interval is configurable in plugin settings:
+- hourly
+- daily (default)
+- weekly
+
+Backups are stored locally in Vencord DataStore. Export to a file regularly if you want off-device protection.
+
+## Context Menu Tags
+
+The plugin adds quick tags to Discord context menus:
+- Right-click a server -> **Priority Server**
+- Right-click a user -> **Best Friend**
+
+These tags are included in backups and used when generating the restore server.
+
+## Updating
+
+### Update this plugin
 
 ```powershell
 cd C:\Users\YOUR_USERNAME\Vencord\src\userplugins\ProfileBackup
 git pull
 cd C:\Users\YOUR_USERNAME\Vencord
 pnpm build
+pnpm inject
 ```
 
-Then restart Discord.
+### After updating Vencord
 
-## Updating Vencord itself
-
-Use the Vencord installer like normal — click update. The plugin lives in `src/userplugins/` which Vencord **never touches** during updates. Your plugin survives automatically. After a Vencord update, just rebuild:
+`src/userplugins` is preserved. Rebuild and inject again:
 
 ```powershell
 cd C:\Users\YOUR_USERNAME\Vencord
@@ -87,46 +118,9 @@ pnpm build
 pnpm inject
 ```
 
-## Usage
+## Security Notes
 
-Open the plugin settings (click the gear icon next to ProfileBackup in the plugins list):
-
-- **Backup Now** — saves a backup to local storage
-- **Export to File** — downloads a `.json` backup file (keep this safe!)
-- **Restore from File** — upload a backup file, preview what's in it, pick what to restore, hit apply
-- **Restore from Last Auto-Backup** — restore from the most recent auto-backup in local storage
-- **Auto-backup interval** — set to hourly, daily, or weekly in the dropdown
-- **Right-click quick tags** — right-click servers/friends to toggle `Priority Server` and `Best Friend` tags
-
-## How auto-backup works
-
-Once enabled, the plugin backs up your profile automatically on a schedule (default: daily). This means if your account gets termed unexpectedly, you always have a recent backup saved locally. You don't need to remember to export manually.
-
-**But you should still export to a file regularly** — local storage backups are lost if you reinstall Discord or wipe your PC. Keep the `.json` file somewhere safe (USB drive, cloud storage, etc.).
-
-## How restore works
-
-1. Install the plugin on your new account
-2. Click **Restore from File** and pick your backup `.json`
-3. A preview shows what's in the backup (friends count, server count, etc.)
-4. Check/uncheck what you want to restore
-5. Click **Apply**
-6. The plugin restores your profile, sends friend requests, and joins servers
-
-Friend requests are sent with delays to avoid rate limits. Friends will see a request from your new account and need to accept it.
-
-Servers are joined via permanent invite links that were created during backup. If you didn't have Create Invite permission in a server, that server's name is saved but you'll need to find an invite yourself.
-
-When you use **Create Restore Server**, the plugin creates 4 channels:
-
-- `priority-servers` (tagged subset)
-- `best-friends` (tagged subset)
-- `servers` (full list)
-- `friends` (full list)
-
-## Security
-
-- **Keep your backup file private.** It contains permanent invite links to your servers. Anyone with the file could use those invites.
-- The plugin uses Discord's own API — it doesn't do anything the Discord client can't already do.
-- Invite links are cached by server ID so the plugin doesn't spam new invites on every backup.
-- On a brand new account, don't restore everything at once if you have hundreds of friends/servers. A new account mass-joining and mass-friending can look suspicious. Space it out if possible.
+- Keep exported backup files private.
+- Backup files may include permanent server invite codes.
+- Anyone with your backup file can read its contents.
+- This plugin uses Discord client/API behavior and still depends on account limits/permissions.
