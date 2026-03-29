@@ -425,6 +425,7 @@ async function restoreGuilds(
 }
 
 const DISCORD_MSG_CHAR_LIMIT = 2000;
+const MAX_SERVER_INVITES_PER_MESSAGE = 20;
 
 function chunkLines(lines: string[], maxContentLen: number, separator: string): string[][] {
     const chunks: string[][] = [];
@@ -446,11 +447,26 @@ function chunkLines(lines: string[], maxContentLen: number, separator: string): 
     return chunks;
 }
 
-function buildPagedMessages(title: string, lines: string[], separator = "\n"): string[] {
+function buildPagedMessages(
+    title: string,
+    lines: string[],
+    separator = "\n",
+    maxLinesPerPage?: number
+): string[] {
     // Reserve chars for "**Title — Page XX/XX**\n"
     const headerReserve = title.length + 25;
     const contentLimit = DISCORD_MSG_CHAR_LIMIT - headerReserve;
-    const chunks = chunkLines(lines, contentLimit, separator);
+    const groupedLines: string[][] = [];
+
+    if (maxLinesPerPage && maxLinesPerPage > 0) {
+        for (let i = 0; i < lines.length; i += maxLinesPerPage) {
+            groupedLines.push(lines.slice(i, i + maxLinesPerPage));
+        }
+    } else {
+        groupedLines.push(lines);
+    }
+
+    const chunks = groupedLines.flatMap(group => chunkLines(group, contentLimit, separator));
     return chunks.map((chunk, i) =>
         `**${title} — ${i + 1}/${chunks.length}**\n${chunk.join(separator)}`
     );
@@ -511,7 +527,7 @@ export async function restoreViaDiscordServer(
                     ? `• **${g.name}** — discord.gg/${g.inviteCode}`
                     : `• **${g.name}** — *(no invite available)*`
             );
-            const messages = buildPagedMessages("Servers (A → Z)", lines);
+            const messages = buildPagedMessages("Servers (A → Z)", lines, "\n", MAX_SERVER_INVITES_PER_MESSAGE);
             for (const msg of messages) {
                 await RestAPI.post({
                     url: `/channels/${serversChannel.id}/messages`,
