@@ -33,6 +33,13 @@ export interface ProfileBackup {
 
 export const BACKUP_VERSION = 1;
 
+export interface DiscordServerRestoreResult {
+    success: boolean;
+    guildId?: string;
+    inviteCode?: string;
+    error?: string;
+}
+
 export interface RestoreResult {
     profile: { success: boolean; error?: string; };
     customStatus: { success: boolean; error?: string; };

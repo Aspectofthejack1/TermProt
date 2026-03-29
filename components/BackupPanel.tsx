@@ -1,8 +1,8 @@
 import { Forms, Button, useState, useEffect, useCallback } from "@webpack/common";
 
 import { collectBackup, saveBackupToDataStore, loadBackupFromDataStore, getLastBackupTime, downloadBackupAsFile } from "../backup";
-import { parseBackupFile, restoreFromBackup } from "../restore";
-import { ProfileBackup, RestoreOptions, RestoreResult } from "../types";
+import { parseBackupFile, restoreFromBackup, restoreViaDiscordServer } from "../restore";
+import { ProfileBackup, RestoreOptions, RestoreResult, DiscordServerRestoreResult } from "../types";
 
 function formatTimeAgo(timestamp: number): string {
     const diff = Date.now() - timestamp;
@@ -116,10 +116,12 @@ function BackupSection() {
     );
 }
 
-function RestorePreview({ backup, onRestore, onCancel }: {
+function RestorePreview({ backup, onRestore, onCreateServer, onCancel, isRunning }: {
     backup: ProfileBackup;
     onRestore: (options: RestoreOptions) => void;
+    onCreateServer: () => void;
     onCancel: () => void;
+    isRunning: boolean;
 }) {
     const [options, setOptions] = useState<RestoreOptions>({
         profile: true,
@@ -177,13 +179,46 @@ function RestorePreview({ backup, onRestore, onCancel }: {
             </div>
 
             <div style={{ display: "flex", gap: 8 }}>
-                <Button onClick={() => onRestore(options)} size={Button.Sizes.SMALL} color={Button.Colors.GREEN}>
+                <Button onClick={() => onRestore(options)} size={Button.Sizes.SMALL} color={Button.Colors.GREEN} disabled={isRunning}>
                     Apply Restore
                 </Button>
-                <Button onClick={onCancel} size={Button.Sizes.SMALL} look={Button.Looks.OUTLINED}>
+                <Button onClick={onCreateServer} size={Button.Sizes.SMALL} color={Button.Colors.BRAND} disabled={isRunning}>
+                    Create Restore Server
+                </Button>
+                <Button onClick={onCancel} size={Button.Sizes.SMALL} look={Button.Looks.OUTLINED} disabled={isRunning}>
                     Cancel
                 </Button>
             </div>
+        </div>
+    );
+}
+
+function DiscordServerResult({ result }: { result: DiscordServerRestoreResult; }) {
+    return (
+        <div style={{ padding: 12, background: "var(--background-secondary)", borderRadius: 8, marginBottom: 12 }}>
+            <Forms.FormTitle tag="h4">Restore Server {result.success ? "Created" : "Failed"}</Forms.FormTitle>
+            {result.success ? (
+                <>
+                    <Forms.FormText style={{ marginBottom: 6 }}>
+                        Your restore server is ready. Join it on your new account to see all your server invites and friends listed in order.
+                    </Forms.FormText>
+                    {result.inviteCode && (
+                        <div style={{ padding: "6px 10px", background: "var(--background-tertiary)", borderRadius: 6, display: "inline-block" }}>
+                            <span style={{ color: "var(--text-muted)", fontSize: 12, marginRight: 6 }}>Invite link:</span>
+                            <strong>discord.gg/{result.inviteCode}</strong>
+                        </div>
+                    )}
+                    {!result.inviteCode && (
+                        <Forms.FormText style={{ color: "var(--text-muted)" }}>
+                            No invite was created — open Discord and find the server manually.
+                        </Forms.FormText>
+                    )}
+                </>
+            ) : (
+                <Forms.FormText style={{ color: "var(--text-danger)" }}>
+                    {result.error ?? "An unknown error occurred."}
+                </Forms.FormText>
+            )}
         </div>
     );
 }
@@ -224,6 +259,7 @@ function RestoreResults({ result }: { result: RestoreResult; }) {
 function RestoreSection() {
     const [preview, setPreview] = useState<ProfileBackup | null>(null);
     const [result, setResult] = useState<RestoreResult | null>(null);
+    const [serverResult, setServerResult] = useState<DiscordServerRestoreResult | null>(null);
     const [status, setStatus] = useState("");
     const [isRunning, setIsRunning] = useState(false);
 
@@ -269,6 +305,7 @@ function RestoreSection() {
         try {
             const res = await restoreFromBackup(preview, options, setStatus);
             setResult(res);
+            setServerResult(null);
             setPreview(null);
             setStatus("");
         } catch (e: any) {
@@ -277,10 +314,26 @@ function RestoreSection() {
         setIsRunning(false);
     }, [preview]);
 
+    const handleCreateServer = useCallback(async () => {
+        if (!preview) return;
+        setIsRunning(true);
+        setStatus("Building restore server...");
+        try {
+            const res = await restoreViaDiscordServer(preview, setStatus);
+            setServerResult(res);
+            setResult(null);
+            setPreview(null);
+            setStatus(res.success ? "" : `Failed: ${res.error}`);
+        } catch (e: any) {
+            setStatus(`Failed: ${e.message}`);
+        }
+        setIsRunning(false);
+    }, [preview]);
+
     return (
         <div>
             <Forms.FormTitle tag="h3">Restore</Forms.FormTitle>
-            {!preview && !result && (
+            {!preview && !result && !serverResult && (
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                     <Button
                         onClick={handleFileUpload}
@@ -303,10 +356,13 @@ function RestoreSection() {
                 <RestorePreview
                     backup={preview}
                     onRestore={handleRestore}
+                    onCreateServer={handleCreateServer}
                     onCancel={() => { setPreview(null); setStatus(""); }}
+                    isRunning={isRunning}
                 />
             )}
             {result && <RestoreResults result={result} />}
+            {serverResult && <DiscordServerResult result={serverResult} />}
             {status && (
                 <Forms.FormText style={{ color: status.includes("failed") || status.includes("Invalid") ? "var(--text-danger)" : "var(--text-muted)" }}>
                     {status}
