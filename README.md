@@ -1,4 +1,4 @@
-# ProfileBackup — Vencord Plugin
+# TermProt (ProfileBackup) — Vencord Plugin
 
 Insurance against Discord account termination. Automatically backs up your entire profile so you can restore it on a new account in one click.
 
@@ -29,18 +29,30 @@ git clone https://github.com/Vendicated/Vencord.git
 cd Vencord
 npm install -g pnpm
 pnpm install
-git clone -b claude/vencord-profile-backup-plugin-KkGGW https://github.com/Aspectofthejack1/DiscordTermProt.git src/userplugins/ProfileBackup
+git clone https://github.com/Aspectofthejack1/TermProt.git src/userplugins/ProfileBackup
 pnpm build
 pnpm inject
 ```
 
-### Already have vencord from soure
+### Already have Vencord from source
 
 Open PowerShell, go to your Vencord folder, and paste:
 
 ```powershell
 cd C:\Users\YOUR_USERNAME\Vencord
-git clone -b claude/vencord-profile-backup-plugin-KkGGW https://github.com/Aspectofthejack1/DiscordTermProt.git src/userplugins/ProfileBackup
+git clone https://github.com/Aspectofthejack1/TermProt.git src/userplugins/ProfileBackup
+pnpm build
+pnpm inject
+```
+
+## Add this plugin to your existing Vencord
+
+If you already have Vencord installed and just want to add this plugin:
+
+```powershell
+cd C:\Users\YOUR_USERNAME\Vencord\src\userplugins
+git clone https://github.com/Aspectofthejack1/TermProt.git ProfileBackup
+cd C:\Users\YOUR_USERNAME\Vencord
 pnpm build
 pnpm inject
 ```
