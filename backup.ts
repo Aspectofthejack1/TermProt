@@ -7,11 +7,13 @@ import { BACKUP_VERSION, ProfileBackup } from "./types";
 const GuildStore = findStoreLazy("GuildStore");
 const GuildChannelStore = findStoreLazy("GuildChannelStore");
 const UserSettingsProtoStore = findStoreLazy("UserSettingsProtoStore");
+const ProtoSettingsModule = findByPropsLazy("ProtoClass", "getCurrentValue");
 
 const DATASTORE_KEY = "ProfileBackup_latestBackup";
 const DATASTORE_TIMESTAMP_KEY = "ProfileBackup_lastBackupTime";
 const DATASTORE_INVITE_CACHE_KEY = "ProfileBackup_inviteCache";
 const LOG_PREFIX = "[ProfileBackup]";
+const URL_RE = /^https?:\/\//i;
 
 async function fetchImageAsBase64(url: string): Promise<string | null> {
     try {
@@ -44,34 +46,123 @@ async function getCustomStatus(): Promise<ProfileBackup["customStatus"]> {
     }
 }
 
-async function getFavoriteGifs(): Promise<string[]> {
-    // Method 1: UserSettingsProtoStore (most reliable, where Discord actually stores them)
-    try {
-        console.log(`${LOG_PREFIX} Attempting favorite GIF fetch via UserSettingsProtoStore`);
-        const frecency = UserSettingsProtoStore?.frecencyWithoutFetchingLatest;
-        const favoriteGifs = frecency?.favoriteGifs?.gifs;
-        if (favoriteGifs && typeof favoriteGifs === "object") {
-            // Sort by order field to preserve the user's arrangement
-            const gifs = Object.entries(favoriteGifs)
-                .sort(([, a]: [string, any], [, b]: [string, any]) => (a.order ?? 0) - (b.order ?? 0))
-                .map(([url]) => url);
-            console.log(`${LOG_PREFIX} Loaded ${gifs.length} favorite GIF(s) from UserSettingsProtoStore`);
-            return gifs;
-        }
-        console.log(`${LOG_PREFIX} UserSettingsProtoStore returned no favorite GIFs`);
-    } catch (e) {
-        console.warn(`${LOG_PREFIX} UserSettingsProtoStore favorite GIF fetch failed`, e);
+function dedupeUrls(urls: string[]): string[] {
+    return Array.from(new Set(urls.filter(url => typeof url === "string" && URL_RE.test(url))));
+}
+
+function extractFavoriteGifUrls(input: unknown): string[] {
+    if (!input) return [];
+
+    if (typeof input === "string") {
+        return URL_RE.test(input) ? [input] : [];
     }
 
-    // Method 2: Proto REST endpoint
+    if (Array.isArray(input)) {
+        const urls = input.flatMap(item => {
+            if (typeof item === "string") return extractFavoriteGifUrls(item);
+            if (!item || typeof item !== "object") return [];
+            const anyItem = item as Record<string, any>;
+            return extractFavoriteGifUrls(anyItem.url ?? anyItem.src ?? anyItem.gifUrl ?? anyItem.mediaUrl);
+        });
+        return dedupeUrls(urls);
+    }
+
+    if (input instanceof Map) {
+        const urls: string[] = [];
+        for (const [key, value] of input.entries()) {
+            urls.push(...extractFavoriteGifUrls(key));
+            urls.push(...extractFavoriteGifUrls(value));
+        }
+        return dedupeUrls(urls);
+    }
+
+    if (typeof input === "object") {
+        const obj = input as Record<string, any>;
+
+        if (obj.gifs) return extractFavoriteGifUrls(obj.gifs);
+
+        const entries = Object.entries(obj);
+        const hasUrlKeys = entries.length > 0 && entries.every(([key]) => URL_RE.test(key));
+
+        if (hasUrlKeys) {
+            return entries
+                .sort(([, a], [, b]) => ((a as any)?.order ?? 0) - ((b as any)?.order ?? 0))
+                .map(([url]) => url);
+        }
+
+        const urls: string[] = [];
+        for (const [, value] of entries) {
+            urls.push(...extractFavoriteGifUrls(value));
+        }
+        return dedupeUrls(urls);
+    }
+
+    return [];
+}
+
+function tryGetFromFrecencyProtoModule(): string[] {
+    const candidate = (ProtoSettingsModule as any)?.default ?? ProtoSettingsModule;
+    const typeName = candidate?.ProtoClass?.typeName;
+    if (!typeName || !typeName.endsWith(".FrecencyUserSettings")) return [];
+
+    const currentValue = candidate?.getCurrentValue?.();
+    return extractFavoriteGifUrls(currentValue?.favoriteGifs?.gifs ?? currentValue?.favoriteGifs);
+}
+
+async function getFavoriteGifs(): Promise<string[]> {
+    // Method 1: Frecency proto module
+    try {
+        console.log(`${LOG_PREFIX} Attempting favorite GIF fetch via FrecencyUserSettings proto module`);
+        const gifs = dedupeUrls(tryGetFromFrecencyProtoModule());
+        if (gifs.length > 0) {
+            console.log(`${LOG_PREFIX} Loaded ${gifs.length} favorite GIF(s) from FrecencyUserSettings proto module`);
+            return gifs;
+        }
+        console.log(`${LOG_PREFIX} FrecencyUserSettings proto module returned no favorite GIFs`);
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} FrecencyUserSettings proto module favorite GIF fetch failed`, e);
+    }
+
+    // Method 2: UserSettingsProtoStore variants
+    try {
+        console.log(`${LOG_PREFIX} Attempting favorite GIF fetch via UserSettingsProtoStore variants`);
+        const candidates = [
+            UserSettingsProtoStore?.frecencyWithoutFetchingLatest?.favoriteGifs?.gifs,
+            UserSettingsProtoStore?.frecencyWithoutFetchingLatest?.favoriteGifs,
+            UserSettingsProtoStore?.settings?.frecency?.favoriteGifs?.gifs,
+            UserSettingsProtoStore?.settings?.frecency?.favoriteGifs,
+            UserSettingsProtoStore?.getState?.()?.settings?.frecency?.favoriteGifs?.gifs,
+            UserSettingsProtoStore?.getState?.()?.settings?.frecency?.favoriteGifs,
+            UserSettingsProtoStore?.getCurrentValue?.()?.favoriteGifs?.gifs,
+            UserSettingsProtoStore?.getCurrentValue?.()?.favoriteGifs,
+        ];
+        for (const [index, candidate] of candidates.entries()) {
+            const gifs = dedupeUrls(extractFavoriteGifUrls(candidate));
+            if (gifs.length > 0) {
+                console.log(`${LOG_PREFIX} Loaded ${gifs.length} favorite GIF(s) from UserSettingsProtoStore variant #${index + 1}`);
+                return gifs;
+            }
+        }
+        console.log(`${LOG_PREFIX} UserSettingsProtoStore variants returned no favorite GIFs`);
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} UserSettingsProtoStore variants favorite GIF fetch failed`, e);
+    }
+
+    // Method 3: Proto REST endpoint
     try {
         console.log(`${LOG_PREFIX} Attempting favorite GIF fetch via /users/@me/settings-proto/2`);
         const resp = await RestAPI.get({ url: "/users/@me/settings-proto/2" });
         if (resp.body) {
-            // Response may be base64-encoded protobuf, try to parse
-            const favoriteGifs = resp.body?.favoriteGifs?.gifs;
-            if (favoriteGifs) {
-                const gifs = Object.keys(favoriteGifs);
+            const gifs = dedupeUrls(
+                extractFavoriteGifUrls(
+                    resp.body?.favoriteGifs?.gifs
+                    ?? resp.body?.favoriteGifs
+                    ?? resp.body?.settings?.frecency?.favoriteGifs?.gifs
+                    ?? resp.body?.settings?.frecency?.favoriteGifs
+                    ?? resp.body
+                )
+            );
+            if (gifs.length > 0) {
                 console.log(`${LOG_PREFIX} Loaded ${gifs.length} favorite GIF(s) from settings-proto endpoint`);
                 return gifs;
             }
@@ -81,19 +172,39 @@ async function getFavoriteGifs(): Promise<string[]> {
         console.warn(`${LOG_PREFIX} settings-proto favorite GIF fetch failed`, e);
     }
 
-    // Method 3: Legacy settings endpoint
+    // Method 4: Legacy settings endpoint
     try {
         console.log(`${LOG_PREFIX} Attempting favorite GIF fetch via /users/@me/settings`);
         const resp = await RestAPI.get({ url: "/users/@me/settings" });
-        const frecency = resp.body?.frecency?.favoriteGifs;
-        if (frecency) {
-            const gifs = Object.keys(frecency);
+        const gifs = dedupeUrls(extractFavoriteGifUrls(resp.body?.frecency?.favoriteGifs ?? resp.body));
+        if (gifs.length > 0) {
             console.log(`${LOG_PREFIX} Loaded ${gifs.length} favorite GIF(s) from legacy settings endpoint`);
             return gifs;
         }
         console.log(`${LOG_PREFIX} Legacy settings endpoint returned no favorite GIFs`);
     } catch (e) {
         console.warn(`${LOG_PREFIX} Legacy settings favorite GIF fetch failed`, e);
+    }
+
+    // Method 5: LocalStorage fallback
+    try {
+        console.log(`${LOG_PREFIX} Attempting favorite GIF fetch via localStorage GIFFavouriteStore`);
+        const raw = localStorage.getItem("GIFFavouriteStore");
+        if (raw) {
+            let gifs = dedupeUrls(extractFavoriteGifUrls(raw));
+            if (gifs.length === 0) {
+                try {
+                    gifs = dedupeUrls(extractFavoriteGifUrls(JSON.parse(raw)));
+                } catch { }
+            }
+            if (gifs.length > 0) {
+                console.log(`${LOG_PREFIX} Loaded ${gifs.length} favorite GIF(s) from localStorage GIFFavouriteStore`);
+                return gifs;
+            }
+        }
+        console.log(`${LOG_PREFIX} localStorage GIFFavouriteStore returned no favorite GIFs`);
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} localStorage GIFFavouriteStore favorite GIF fetch failed`, e);
     }
 
     console.warn(`${LOG_PREFIX} Could not load favorite GIFs from any method; backing up 0 GIFs`);
