@@ -12,6 +12,8 @@ const ProtoSettingsModule = findByPropsLazy("ProtoClass", "getCurrentValue");
 const DATASTORE_KEY = "ProfileBackup_latestBackup";
 const DATASTORE_TIMESTAMP_KEY = "ProfileBackup_lastBackupTime";
 const DATASTORE_INVITE_CACHE_KEY = "ProfileBackup_inviteCache";
+const DATASTORE_PRIORITY_GUILDS_KEY = "ProfileBackup_priorityGuildIds";
+const DATASTORE_BEST_FRIENDS_KEY = "ProfileBackup_bestFriendIds";
 const LOG_PREFIX = "[ProfileBackup]";
 const URL_RE = /^https?:\/\//i;
 
@@ -238,17 +240,66 @@ async function saveInviteCache(cache: Record<string, string>): Promise<void> {
     await DataStore.set(DATASTORE_INVITE_CACHE_KEY, cache);
 }
 
+function pruneInviteCache(cache: Record<string, string>, activeGuildIds: Set<string>): Record<string, string> {
+    const pruned: Record<string, string> = {};
+    for (const [guildId, inviteCode] of Object.entries(cache)) {
+        if (activeGuildIds.has(guildId)) {
+            pruned[guildId] = inviteCode;
+        }
+    }
+    return pruned;
+}
+
+function normalizeIdArray(input: unknown): string[] {
+    if (!Array.isArray(input)) return [];
+    return Array.from(new Set(input.filter((id): id is string => typeof id === "string" && id.length > 0)));
+}
+
+export async function getPriorityGuildIds(): Promise<string[]> {
+    return normalizeIdArray(await DataStore.get(DATASTORE_PRIORITY_GUILDS_KEY));
+}
+
+export async function setPriorityGuildIds(ids: string[]): Promise<void> {
+    await DataStore.set(DATASTORE_PRIORITY_GUILDS_KEY, normalizeIdArray(ids));
+}
+
+export async function togglePriorityGuildId(guildId: string): Promise<boolean> {
+    const current = new Set(await getPriorityGuildIds());
+    if (current.has(guildId)) {
+        current.delete(guildId);
+        await setPriorityGuildIds(Array.from(current));
+        return false;
+    }
+    current.add(guildId);
+    await setPriorityGuildIds(Array.from(current));
+    return true;
+}
+
+export async function getBestFriendIds(): Promise<string[]> {
+    return normalizeIdArray(await DataStore.get(DATASTORE_BEST_FRIENDS_KEY));
+}
+
+export async function setBestFriendIds(ids: string[]): Promise<void> {
+    await DataStore.set(DATASTORE_BEST_FRIENDS_KEY, normalizeIdArray(ids));
+}
+
+export async function toggleBestFriendId(userId: string): Promise<boolean> {
+    const current = new Set(await getBestFriendIds());
+    if (current.has(userId)) {
+        current.delete(userId);
+        await setBestFriendIds(Array.from(current));
+        return false;
+    }
+    current.add(userId);
+    await setBestFriendIds(Array.from(current));
+    return true;
+}
+
 async function getGuildInvite(guildId: string, cache: Record<string, string>): Promise<string | null> {
     // Use cached invite if we already have one for this guild ID
     if (cache[guildId]) return cache[guildId];
 
     try {
-        const guild = GuildStore.getGuild(guildId);
-        if (guild?.vanityURLCode) {
-            cache[guildId] = guild.vanityURLCode;
-            return guild.vanityURLCode;
-        }
-
         // Create a permanent invite on the first available text channel
         const channels = GuildChannelStore.getChannels(guildId);
         const textChannels = channels?.SELECTABLE?.map((c: any) => c.channel) ?? [];
@@ -311,13 +362,24 @@ export async function collectBackup(
 
     onProgress?.("Collecting friends list...");
     const friends = getFriends();
+    const friendIds = new Set(friends.map(friend => friend.id));
+
+    onProgress?.("Syncing best friend tags...");
+    const bestFriendIds = (await getBestFriendIds()).filter(id => friendIds.has(id));
+    await setBestFriendIds(bestFriendIds);
 
     onProgress?.("Collecting server list and creating invites...");
     const guilds: ProfileBackup["guilds"] = [];
     const allGuilds = Object.values(GuildStore.getGuilds()) as any[];
+    const activeGuildIds = new Set(allGuilds.map((guild: any) => guild.id));
+
+    onProgress?.("Syncing priority server tags...");
+    const priorityGuildIds = (await getPriorityGuildIds()).filter(id => activeGuildIds.has(id));
+    await setPriorityGuildIds(priorityGuildIds);
 
     // Load cached invites so we don't recreate them every backup
-    const inviteCache = await getInviteCache();
+    let inviteCache = await getInviteCache();
+    inviteCache = pruneInviteCache(inviteCache, activeGuildIds);
     let newInvitesCreated = 0;
 
     for (const guild of allGuilds) {
@@ -361,6 +423,8 @@ export async function collectBackup(
         },
         customStatus,
         favoriteGifs,
+        priorityGuildIds,
+        bestFriendIds,
         friends,
         guilds,
     };

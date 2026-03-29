@@ -12,6 +12,8 @@ Insurance against Discord account termination. Automatically backs up your entir
 | Banner & accent color | Yes | |
 | Custom status | Yes | |
 | Favorite GIFs | Yes | Preserved in correct order |
+| Priority servers | Yes | Right-click a server and toggle priority tag |
+| Best friends | Yes | Right-click a friend and toggle best-friend tag |
 | Friends list | Partial | Sends friend requests — they still need to accept |
 | Server list | Partial | Creates permanent invite links — some servers may need manual rejoin |
 
@@ -94,6 +96,7 @@ Open the plugin settings (click the gear icon next to ProfileBackup in the plugi
 - **Restore from File** — upload a backup file, preview what's in it, pick what to restore, hit apply
 - **Restore from Last Auto-Backup** — restore from the most recent auto-backup in local storage
 - **Auto-backup interval** — set to hourly, daily, or weekly in the dropdown
+- **Right-click quick tags** — right-click servers/friends to toggle `Priority Server` and `Best Friend` tags
 
 ## How auto-backup works
 
@@ -113,6 +116,13 @@ Once enabled, the plugin backs up your profile automatically on a schedule (defa
 Friend requests are sent with delays to avoid rate limits. Friends will see a request from your new account and need to accept it.
 
 Servers are joined via permanent invite links that were created during backup. If you didn't have Create Invite permission in a server, that server's name is saved but you'll need to find an invite yourself.
+
+When you use **Create Restore Server**, the plugin creates 4 channels:
+
+- `priority-servers` (tagged subset)
+- `best-friends` (tagged subset)
+- `servers` (full list)
+- `friends` (full list)
 
 ## Security
 

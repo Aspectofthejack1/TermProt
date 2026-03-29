@@ -127,21 +127,19 @@ function RestorePreview({ backup, onRestore, onCreateServer, onCancel, isRunning
         profile: true,
         customStatus: true,
         favoriteGifs: true,
-        friends: true,
-        guilds: true,
     });
 
     const toggle = (key: keyof RestoreOptions) =>
         setOptions(prev => ({ ...prev, [key]: !prev[key] }));
-
-    const guildsWithInvites = backup.guilds.filter(g => g.inviteCode).length;
-    const guildsWithout = backup.guilds.length - guildsWithInvites;
 
     return (
         <div style={{ padding: 12, background: "var(--background-secondary)", borderRadius: 8, marginBottom: 12 }}>
             <Forms.FormTitle tag="h4">Restore Preview</Forms.FormTitle>
             <Forms.FormText style={{ marginBottom: 8 }}>
                 Backup from <strong>{backup.sourceUser.username}</strong> — {new Date(backup.exportedAt).toLocaleDateString()}
+            </Forms.FormText>
+            <Forms.FormText style={{ marginBottom: 8, color: "var(--text-muted)" }}>
+                Tagged: {(backup.priorityGuildIds?.length ?? 0)} priority server(s), {(backup.bestFriendIds?.length ?? 0)} best friend(s)
             </Forms.FormText>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 }}>
@@ -163,18 +161,6 @@ function RestorePreview({ backup, onRestore, onCreateServer, onCancel, isRunning
                     note={`${backup.favoriteGifs.length} favorite GIF${backup.favoriteGifs.length !== 1 ? "s" : ""}`}
                     checked={options.favoriteGifs}
                     onChange={() => toggle("favoriteGifs")}
-                />
-                <CheckboxRow
-                    label="Friends List"
-                    note={`${backup.friends.length} friend${backup.friends.length !== 1 ? "s" : ""} — requests will be sent`}
-                    checked={options.friends}
-                    onChange={() => toggle("friends")}
-                />
-                <CheckboxRow
-                    label="Servers"
-                    note={`${guildsWithInvites} server${guildsWithInvites !== 1 ? "s" : ""} with invites, ${guildsWithout} need manual rejoin`}
-                    checked={options.guilds}
-                    onChange={() => toggle("guilds")}
                 />
             </div>
 
@@ -200,7 +186,7 @@ function DiscordServerResult({ result }: { result: DiscordServerRestoreResult; }
             {result.success ? (
                 <>
                     <Forms.FormText style={{ marginBottom: 6 }}>
-                        Your restore server is ready. Join it on your new account to see all your server invites and friends listed in order.
+                        Your restore server is ready. Join it on your new account to see 4 channels: priority-servers, best-friends, servers, and friends.
                     </Forms.FormText>
                     {result.inviteCode && (
                         <div style={{ padding: "6px 10px", background: "var(--background-tertiary)", borderRadius: 6, display: "inline-block" }}>
@@ -231,27 +217,7 @@ function RestoreResults({ result }: { result: RestoreResult; }) {
                 <li>{result.profile.success ? "Profile updated" : `Profile failed: ${result.profile.error}`}</li>
                 <li>{result.customStatus.success ? "Custom status set" : `Custom status failed: ${result.customStatus.error}`}</li>
                 <li>{result.favoriteGifs.success ? "GIF favorites restored" : `GIF favorites failed: ${result.favoriteGifs.error}`}</li>
-                <li>
-                    Friends: {result.friends.sent} request{result.friends.sent !== 1 ? "s" : ""} sent
-                    {result.friends.failed > 0 && `, ${result.friends.failed} failed`}
-                </li>
-                <li>
-                    Servers: {result.guilds.joined} joined
-                    {result.guilds.failed > 0 && `, ${result.guilds.failed} failed`}
-                </li>
             </ul>
-            {result.friends.errors.length > 0 && (
-                <details style={{ marginTop: 8 }}>
-                    <summary>Friend request errors</summary>
-                    <ul>{result.friends.errors.map((e, i) => <li key={i}>{e}</li>)}</ul>
-                </details>
-            )}
-            {result.guilds.errors.length > 0 && (
-                <details style={{ marginTop: 8 }}>
-                    <summary>Server join errors</summary>
-                    <ul>{result.guilds.errors.map((e, i) => <li key={i}>{e}</li>)}</ul>
-                </details>
-            )}
         </div>
     );
 }

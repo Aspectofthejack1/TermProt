@@ -220,14 +220,18 @@ function writeLocalGifFavoriteStore(urls: string[]): number {
 }
 
 export function parseBackupFile(jsonString: string): ProfileBackup {
-    const data = JSON.parse(jsonString);
+    const data = JSON.parse(jsonString) as Partial<ProfileBackup> & Record<string, any>;
     if (!data.version || data.version > BACKUP_VERSION) {
         throw new Error(`Unsupported backup version: ${data.version}. Expected ${BACKUP_VERSION} or lower.`);
     }
     if (!data.sourceUser || !data.profile) {
         throw new Error("Invalid backup file: missing required fields.");
     }
-    return data as ProfileBackup;
+    return {
+        ...data,
+        priorityGuildIds: Array.isArray(data.priorityGuildIds) ? data.priorityGuildIds : [],
+        bestFriendIds: Array.isArray(data.bestFriendIds) ? data.bestFriendIds : [],
+    } as ProfileBackup;
 }
 
 async function restoreProfile(backup: ProfileBackup): Promise<{ success: boolean; error?: string; }> {
@@ -361,71 +365,8 @@ async function restoreFavoriteGifs(backup: ProfileBackup): Promise<{ success: bo
     }
 }
 
-async function restoreFriends(
-    backup: ProfileBackup,
-    onProgress?: (status: string) => void
-): Promise<{ sent: number; failed: number; errors: string[]; }> {
-    let sent = 0;
-    let failed = 0;
-    const errors: string[] = [];
-
-    for (const friend of backup.friends) {
-        onProgress?.(`Sending friend request to ${friend.username}...`);
-        try {
-            await RestAPI.post({
-                url: "/users/@me/relationships",
-                body: {
-                    username: friend.username,
-                    discriminator: 0,
-                },
-            });
-            sent++;
-        } catch (e: any) {
-            failed++;
-            const msg = e?.body?.message ?? e?.message ?? "Unknown error";
-            errors.push(`${friend.username}: ${msg}`);
-        }
-        // Rate limit delay
-        await sleep(3000);
-    }
-
-    return { sent, failed, errors };
-}
-
-async function restoreGuilds(
-    backup: ProfileBackup,
-    onProgress?: (status: string) => void
-): Promise<{ joined: number; failed: number; errors: string[]; }> {
-    let joined = 0;
-    let failed = 0;
-    const errors: string[] = [];
-
-    for (const guild of backup.guilds) {
-        if (!guild.inviteCode) {
-            failed++;
-            errors.push(`${guild.name}: No invite link available — rejoin manually`);
-            continue;
-        }
-
-        onProgress?.(`Joining server: ${guild.name}...`);
-        try {
-            await RestAPI.post({
-                url: `/invites/${guild.inviteCode}`,
-            });
-            joined++;
-        } catch (e: any) {
-            failed++;
-            const msg = e?.body?.message ?? e?.message ?? "Unknown error";
-            errors.push(`${guild.name}: ${msg}`);
-        }
-        await sleep(1500);
-    }
-
-    return { joined, failed, errors };
-}
-
 const DISCORD_MSG_CHAR_LIMIT = 2000;
-const MAX_SERVER_INVITES_PER_MESSAGE = 20;
+const MAX_SERVER_INVITES_PER_MESSAGE = 10;
 
 function chunkLines(lines: string[], maxContentLen: number, separator: string): string[][] {
     const chunks: string[][] = [];
@@ -483,8 +424,10 @@ export async function restoreViaDiscordServer(
             body: {
                 name: `Restore — ${backup.sourceUser.username}`,
                 channels: [
-                    { id: "100", type: 0, name: "servers" },
-                    { id: "101", type: 0, name: "friends" },
+                    { id: "100", type: 0, name: "priority-servers" },
+                    { id: "101", type: 0, name: "best-friends" },
+                    { id: "102", type: 0, name: "servers" },
+                    { id: "103", type: 0, name: "friends" },
                 ],
             },
         });
@@ -501,10 +444,12 @@ export async function restoreViaDiscordServer(
         const allChannels: any[] = channelsResp.body ?? [];
         const textChannels = allChannels.filter((c: any) => c.type === 0);
 
-        const serversChannel = textChannels.find((c: any) => c.name === "servers") ?? textChannels[0];
+        const priorityServersChannel = textChannels.find((c: any) => c.name === "priority-servers") ?? textChannels[0];
+        const bestFriendsChannel = textChannels.find((c: any) => c.name === "best-friends") ?? priorityServersChannel;
+        const serversChannel = textChannels.find((c: any) => c.name === "servers") ?? priorityServersChannel;
         const friendsChannel = textChannels.find((c: any) => c.name === "friends") ?? serversChannel;
 
-        if (!serversChannel) {
+        if (!priorityServersChannel || !serversChannel) {
             return { success: false, guildId, error: "No text channel found in the new guild." };
         }
 
@@ -512,42 +457,80 @@ export async function restoreViaDiscordServer(
         let inviteCode: string | undefined;
         try {
             const invResp = await RestAPI.post({
-                url: `/channels/${serversChannel.id}/invites`,
+                url: `/channels/${priorityServersChannel.id}/invites`,
                 body: { max_age: 0, max_uses: 0, temporary: false },
             });
             inviteCode = invResp.body?.code;
         } catch { /* invite is optional */ }
 
-        // Post sorted server invites
+        // Post sorted server invites into both priority and all-servers channels.
+        const priorityGuildIds = new Set(backup.priorityGuildIds ?? []);
         if (backup.guilds.length > 0) {
             onProgress?.(`Posting ${backup.guilds.length} server invite(s)...`);
             const sorted = [...backup.guilds].sort((a, b) => a.name.localeCompare(b.name));
-            const lines = sorted.map(g =>
+            const allLines = sorted.map(g =>
                 g.inviteCode
                     ? `• **${g.name}** — discord.gg/${g.inviteCode}`
                     : `• **${g.name}** — *(no invite available)*`
             );
-            const messages = buildPagedMessages("Servers (A → Z)", lines, "\n", MAX_SERVER_INVITES_PER_MESSAGE);
-            for (const msg of messages) {
+            const priorityLines = sorted
+                .filter(g => priorityGuildIds.has(g.id))
+                .map(g =>
+                    g.inviteCode
+                        ? `• **${g.name}** — discord.gg/${g.inviteCode}`
+                        : `• **${g.name}** — *(no invite available)*`
+                );
+
+            const allMessages = buildPagedMessages("Servers (A → Z)", allLines, "\n", MAX_SERVER_INVITES_PER_MESSAGE);
+            for (const msg of allMessages) {
                 await RestAPI.post({
                     url: `/channels/${serversChannel.id}/messages`,
                     body: { content: msg },
                 });
                 await sleep(600);
             }
+
+            const priorityMessages = priorityLines.length > 0
+                ? buildPagedMessages("Priority Servers (A → Z)", priorityLines, "\n", MAX_SERVER_INVITES_PER_MESSAGE)
+                : ["**Priority Servers**\nNo priority servers were tagged in this backup."];
+
+            for (const msg of priorityMessages) {
+                await RestAPI.post({
+                    url: `/channels/${priorityServersChannel.id}/messages`,
+                    body: { content: msg },
+                });
+                await sleep(600);
+            }
         }
 
-        // Post friend mentions sorted by display name
+        // Post friend mentions into both best-friends and all-friends channels.
+        const bestFriendIds = new Set(backup.bestFriendIds ?? []);
         if (backup.friends.length > 0) {
             onProgress?.(`Posting ${backup.friends.length} friend mention(s)...`);
             const sorted = [...backup.friends].sort((a, b) =>
                 a.displayName.localeCompare(b.displayName)
             );
-            const lines = sorted.map(f => `• **${f.displayName}** — <@${f.id}>`);
-            const messages = buildPagedMessages("Friends (A → Z)", lines);
-            for (const msg of messages) {
+            const allLines = sorted.map(f => `• **${f.displayName}** — <@${f.id}>`);
+            const bestLines = sorted
+                .filter(f => bestFriendIds.has(f.id))
+                .map(f => `• **${f.displayName}** — <@${f.id}>`);
+
+            const allMessages = buildPagedMessages("Friends (A → Z)", allLines);
+            for (const msg of allMessages) {
                 await RestAPI.post({
                     url: `/channels/${friendsChannel.id}/messages`,
+                    body: { content: msg, allowed_mentions: { parse: [] } },
+                });
+                await sleep(600);
+            }
+
+            const bestMessages = bestLines.length > 0
+                ? buildPagedMessages("Best Friends (A → Z)", bestLines)
+                : ["**Best Friends**\nNo best friends were tagged in this backup."];
+
+            for (const msg of bestMessages) {
+                await RestAPI.post({
+                    url: `/channels/${bestFriendsChannel.id}/messages`,
                     body: { content: msg, allowed_mentions: { parse: [] } },
                 });
                 await sleep(600);
@@ -570,8 +553,6 @@ export async function restoreFromBackup(
         profile: { success: true },
         customStatus: { success: true },
         favoriteGifs: { success: true },
-        friends: { sent: 0, failed: 0, errors: [] },
-        guilds: { joined: 0, failed: 0, errors: [] },
     };
 
     if (options.profile) {
@@ -587,16 +568,6 @@ export async function restoreFromBackup(
     if (options.favoriteGifs) {
         onProgress?.("Restoring favorite GIFs...");
         result.favoriteGifs = await restoreFavoriteGifs(backup);
-    }
-
-    if (options.friends) {
-        onProgress?.("Sending friend requests...");
-        result.friends = await restoreFriends(backup, onProgress);
-    }
-
-    if (options.guilds) {
-        onProgress?.("Joining servers...");
-        result.guilds = await restoreGuilds(backup, onProgress);
     }
 
     onProgress?.("Restore complete!");

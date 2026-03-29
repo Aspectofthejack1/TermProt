@@ -18,6 +18,8 @@ export interface ProfileBackup {
         expiresAt: string | null;
     } | null;
     favoriteGifs: string[];
+    priorityGuildIds: string[];
+    bestFriendIds: string[];
     friends: Array<{
         id: string;
         username: string;
@@ -31,7 +33,7 @@ export interface ProfileBackup {
     }>;
 }
 
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 
 export interface DiscordServerRestoreResult {
     success: boolean;
@@ -44,22 +46,10 @@ export interface RestoreResult {
     profile: { success: boolean; error?: string; };
     customStatus: { success: boolean; error?: string; };
     favoriteGifs: { success: boolean; error?: string; };
-    friends: {
-        sent: number;
-        failed: number;
-        errors: string[];
-    };
-    guilds: {
-        joined: number;
-        failed: number;
-        errors: string[];
-    };
 }
 
 export interface RestoreOptions {
     profile: boolean;
     customStatus: boolean;
     favoriteGifs: boolean;
-    friends: boolean;
-    guilds: boolean;
 }

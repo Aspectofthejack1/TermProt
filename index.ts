@@ -1,7 +1,15 @@
 import { definePluginSettings } from "@api/Settings";
+import { NavContextMenuPatchCallback } from "@api/ContextMenu";
 import definePlugin, { OptionType } from "@utils/types";
+import { Menu, React, showToast, Toasts } from "@webpack/common";
 
-import { collectBackup, saveBackupToDataStore, getLastBackupTime } from "./backup";
+import {
+    collectBackup,
+    saveBackupToDataStore,
+    getLastBackupTime,
+    togglePriorityGuildId,
+    toggleBestFriendId,
+} from "./backup";
 import BackupPanel from "./components/BackupPanel";
 
 const INTERVAL_MS: Record<string, number> = {
@@ -11,6 +19,43 @@ const INTERVAL_MS: Record<string, number> = {
 };
 
 let autoBackupTimer: ReturnType<typeof setInterval> | null = null;
+
+const GuildContextPatch: NavContextMenuPatchCallback = (children, { guild }: { guild?: { id: string; name?: string; }; }) => {
+    if (!guild?.id) return;
+
+    children.push(
+        React.createElement(Menu.MenuItem, {
+            id: "profilebackup-priority-server",
+            label: "Priority Server",
+            action: async () => {
+                const enabled = await togglePriorityGuildId(guild.id);
+                showToast(
+                    `${enabled ? "Marked" : "Unmarked"} ${guild.name ?? "server"} as Priority Server`,
+                    Toasts.Type.MESSAGE
+                );
+            }
+        })
+    );
+};
+
+const UserContextPatch: NavContextMenuPatchCallback = (children, { user }: { user?: { id: string; username?: string; globalName?: string; }; }) => {
+    if (!user?.id) return;
+
+    children.push(
+        React.createElement(Menu.MenuItem, {
+            id: "profilebackup-best-friend",
+            label: "Best Friend",
+            action: async () => {
+                const enabled = await toggleBestFriendId(user.id);
+                const name = user.globalName ?? user.username ?? "user";
+                showToast(
+                    `${enabled ? "Marked" : "Unmarked"} ${name} as Best Friend`,
+                    Toasts.Type.MESSAGE
+                );
+            }
+        })
+    );
+};
 
 async function runAutoBackup() {
     try {
@@ -55,6 +100,12 @@ export default definePlugin({
     settings,
 
     settingsAboutComponent: BackupPanel,
+
+    contextMenus: {
+        "guild-context": GuildContextPatch,
+        "guild-header-popout": GuildContextPatch,
+        "user-context": UserContextPatch
+    },
 
     start() {
         const interval = settings.store.autoBackupInterval ?? "daily";
