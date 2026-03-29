@@ -34,7 +34,7 @@ pnpm build
 pnpm inject
 ```
 
-### Already have Vencord from source
+### Already have vencord from soure
 
 Open PowerShell, go to your Vencord folder, and paste:
 
