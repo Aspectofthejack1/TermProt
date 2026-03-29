@@ -11,6 +11,7 @@ const UserSettingsProtoStore = findStoreLazy("UserSettingsProtoStore");
 const DATASTORE_KEY = "ProfileBackup_latestBackup";
 const DATASTORE_TIMESTAMP_KEY = "ProfileBackup_lastBackupTime";
 const DATASTORE_INVITE_CACHE_KEY = "ProfileBackup_inviteCache";
+const LOG_PREFIX = "[ProfileBackup]";
 
 async function fetchImageAsBase64(url: string): Promise<string | null> {
     try {
@@ -46,35 +47,56 @@ async function getCustomStatus(): Promise<ProfileBackup["customStatus"]> {
 async function getFavoriteGifs(): Promise<string[]> {
     // Method 1: UserSettingsProtoStore (most reliable, where Discord actually stores them)
     try {
+        console.log(`${LOG_PREFIX} Attempting favorite GIF fetch via UserSettingsProtoStore`);
         const frecency = UserSettingsProtoStore?.frecencyWithoutFetchingLatest;
         const favoriteGifs = frecency?.favoriteGifs?.gifs;
         if (favoriteGifs && typeof favoriteGifs === "object") {
             // Sort by order field to preserve the user's arrangement
-            return Object.entries(favoriteGifs)
+            const gifs = Object.entries(favoriteGifs)
                 .sort(([, a]: [string, any], [, b]: [string, any]) => (a.order ?? 0) - (b.order ?? 0))
                 .map(([url]) => url);
+            console.log(`${LOG_PREFIX} Loaded ${gifs.length} favorite GIF(s) from UserSettingsProtoStore`);
+            return gifs;
         }
-    } catch { }
+        console.log(`${LOG_PREFIX} UserSettingsProtoStore returned no favorite GIFs`);
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} UserSettingsProtoStore favorite GIF fetch failed`, e);
+    }
 
     // Method 2: Proto REST endpoint
     try {
+        console.log(`${LOG_PREFIX} Attempting favorite GIF fetch via /users/@me/settings-proto/2`);
         const resp = await RestAPI.get({ url: "/users/@me/settings-proto/2" });
         if (resp.body) {
             // Response may be base64-encoded protobuf, try to parse
             const favoriteGifs = resp.body?.favoriteGifs?.gifs;
             if (favoriteGifs) {
-                return Object.keys(favoriteGifs);
+                const gifs = Object.keys(favoriteGifs);
+                console.log(`${LOG_PREFIX} Loaded ${gifs.length} favorite GIF(s) from settings-proto endpoint`);
+                return gifs;
             }
         }
-    } catch { }
+        console.log(`${LOG_PREFIX} settings-proto endpoint returned no favorite GIFs`);
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} settings-proto favorite GIF fetch failed`, e);
+    }
 
     // Method 3: Legacy settings endpoint
     try {
+        console.log(`${LOG_PREFIX} Attempting favorite GIF fetch via /users/@me/settings`);
         const resp = await RestAPI.get({ url: "/users/@me/settings" });
         const frecency = resp.body?.frecency?.favoriteGifs;
-        if (frecency) return Object.keys(frecency);
-    } catch { }
+        if (frecency) {
+            const gifs = Object.keys(frecency);
+            console.log(`${LOG_PREFIX} Loaded ${gifs.length} favorite GIF(s) from legacy settings endpoint`);
+            return gifs;
+        }
+        console.log(`${LOG_PREFIX} Legacy settings endpoint returned no favorite GIFs`);
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} Legacy settings favorite GIF fetch failed`, e);
+    }
 
+    console.warn(`${LOG_PREFIX} Could not load favorite GIFs from any method; backing up 0 GIFs`);
     return [];
 }
 
@@ -174,6 +196,7 @@ export async function collectBackup(
 
     onProgress?.("Fetching favorite GIFs...");
     const favoriteGifs = await getFavoriteGifs();
+    console.log(`${LOG_PREFIX} Backup collection found ${favoriteGifs.length} favorite GIF(s)`);
 
     onProgress?.("Collecting friends list...");
     const friends = getFriends();
@@ -235,12 +258,18 @@ export async function collectBackup(
 }
 
 export async function saveBackupToDataStore(backup: ProfileBackup): Promise<void> {
+    console.log(`${LOG_PREFIX} Saving backup to DataStore (favorite GIFs: ${backup.favoriteGifs.length})`);
     await DataStore.set(DATASTORE_KEY, backup);
     await DataStore.set(DATASTORE_TIMESTAMP_KEY, Date.now());
+    console.log(`${LOG_PREFIX} Backup saved to DataStore successfully`);
 }
 
 export async function loadBackupFromDataStore(): Promise<ProfileBackup | null> {
-    return await DataStore.get(DATASTORE_KEY) ?? null;
+    const backup = await DataStore.get(DATASTORE_KEY) ?? null;
+    console.log(
+        `${LOG_PREFIX} Loaded backup from DataStore: ${backup ? `found (favorite GIFs: ${backup.favoriteGifs.length})` : "not found"}`
+    );
+    return backup;
 }
 
 export async function getLastBackupTime(): Promise<number | null> {

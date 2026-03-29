@@ -2,6 +2,8 @@ import { RestAPI } from "@webpack/common";
 
 import { BACKUP_VERSION, ProfileBackup, RestoreOptions, RestoreResult } from "./types";
 
+const LOG_PREFIX = "[ProfileBackup]";
+
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -63,9 +65,13 @@ async function restoreCustomStatus(backup: ProfileBackup): Promise<{ success: bo
 }
 
 async function restoreFavoriteGifs(backup: ProfileBackup): Promise<{ success: boolean; error?: string; }> {
-    if (backup.favoriteGifs.length === 0) return { success: true };
+    if (backup.favoriteGifs.length === 0) {
+        console.log(`${LOG_PREFIX} Restore favorite GIFs skipped: backup contains 0 GIFs`);
+        return { success: true };
+    }
 
     try {
+        console.log(`${LOG_PREFIX} Restoring ${backup.favoriteGifs.length} favorite GIF(s)`);
         // Rebuild the frecency object preserving order from backup
         const now = Date.now();
         const favoriteGifs: Record<string, any> = {};
@@ -85,8 +91,10 @@ async function restoreFavoriteGifs(backup: ProfileBackup): Promise<{ success: bo
                 frecency: { favoriteGifs },
             },
         });
+        console.log(`${LOG_PREFIX} Favorite GIF restore request completed successfully`);
         return { success: true };
     } catch (e: any) {
+        console.error(`${LOG_PREFIX} Favorite GIF restore failed`, e);
         return { success: false, error: e?.message ?? "Failed to restore GIF favorites" };
     }
 }
