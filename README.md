@@ -4,6 +4,12 @@
 
 It is built for recovery and convenience: keep your profile details, favorite GIFs, and account organization data in a backup file you control.
 
+## Trust & Transparency
+
+- This plugin is open source, so anyone can inspect the code in this repository.
+- VirusTotal scan report: [ProfileBackup file analysis](https://www.virustotal.com/gui/file/cd9f701f8bbfa9937dd7154e6915a65036d30700d5ba7b1699d8a72881f24d2d?nocache=1)
+- No hidden installer is included in this repository; build instructions are documented below.
+
 ## What It Backs Up
 
 | Item | Backup | Restore | Notes |
@@ -124,3 +130,4 @@ pnpm inject
 - Backup files may include permanent server invite codes.
 - Anyone with your backup file can read its contents.
 - This plugin uses Discord client/API behavior and still depends on account limits/permissions.
+- Malware scan report (VirusTotal): [ProfileBackup file analysis](https://www.virustotal.com/gui/file/cd9f701f8bbfa9937dd7154e6915a65036d30700d5ba7b1699d8a72881f24d2d?nocache=1)
