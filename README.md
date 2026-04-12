@@ -55,6 +55,8 @@ pnpm build
 pnpm inject
 ```
 
+> `pnpm inject` opens the Vencord installer. Choose your target client there (Discord or Vesktop).
+
 ### If you already have Vencord
 
 ```powershell
@@ -63,6 +65,26 @@ git clone https://github.com/Aspectofthejack1/TermProt.git src/userplugins/Profi
 pnpm build
 pnpm inject
 ```
+
+## Vesktop Compatibility
+
+Yes - `ProfileBackup` works on Vesktop as long as you are using a source-built Vencord install and inject it into Vesktop.
+
+### Install for Vesktop
+
+1. Install [Vesktop](https://github.com/Vencord/Vesktop) normally.
+2. Build Vencord from source (same commands as above).
+3. Put this plugin in `src/userplugins/ProfileBackup`.
+4. Run:
+
+```powershell
+cd C:\Users\YOUR_USERNAME\Vencord
+pnpm build
+pnpm inject
+```
+
+5. In the injector UI, select your **Vesktop** install as the target to patch.
+6. Restart Vesktop, then enable `ProfileBackup` in `Settings -> Vencord -> Plugins`.
 
 ### Enable plugin
 
@@ -93,6 +115,16 @@ Auto-backup interval is configurable in plugin settings:
 - weekly
 
 Backups are stored locally in Vencord DataStore. Export to a file regularly if you want off-device protection.
+
+## Make Sure It Actually Saves
+
+To make sure backups persist (including on Vesktop):
+
+1. Open plugin settings and click **Backup Now** once.
+2. Confirm it shows `Last backup: just now` (or similar).
+3. Set an auto-backup interval (hourly/daily/weekly).
+4. Keep at least one exported `.json` backup via **Export to File** (recommended for reinstalls/device moves).
+5. Avoid clearing app/site data for Discord/Vesktop unless you already exported a backup file.
 
 ## Context Menu Tags
 
