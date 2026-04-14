@@ -4,6 +4,12 @@
 
 It is built for recovery and convenience: keep your profile details, favorite GIFs, and account organization data in a backup file you control.
 
+## Trust & Transparency
+
+- This plugin is open source, so anyone can inspect the code in this repository.
+- VirusTotal scan report: [ProfileBackup file analysis](https://www.virustotal.com/gui/file/cd9f701f8bbfa9937dd7154e6915a65036d30700d5ba7b1699d8a72881f24d2d?nocache=1)
+- No hidden installer is included in this repository; build instructions are documented below.
+
 ## What It Backs Up
 
 | Item | Backup | Restore | Notes |
@@ -49,6 +55,8 @@ pnpm build
 pnpm inject
 ```
 
+> `pnpm inject` opens the Vencord installer. Choose your target client there (Discord or Vesktop).
+
 ### If you already have Vencord
 
 ```powershell
@@ -57,6 +65,26 @@ git clone https://github.com/Aspectofthejack1/TermProt.git src/userplugins/Profi
 pnpm build
 pnpm inject
 ```
+
+## Vesktop Compatibility
+
+Yes - `ProfileBackup` works on Vesktop as long as you are using a source-built Vencord install and inject it into Vesktop.
+
+### Install for Vesktop
+
+1. Install [Vesktop](https://github.com/Vencord/Vesktop) normally.
+2. Build Vencord from source (same commands as above).
+3. Put this plugin in `src/userplugins/ProfileBackup`.
+4. Run:
+
+```powershell
+cd C:\Users\YOUR_USERNAME\Vencord
+pnpm build
+pnpm inject
+```
+
+5. In the injector UI, select your **Vesktop** install as the target to patch.
+6. Restart Vesktop, then enable `ProfileBackup` in `Settings -> Vencord -> Plugins`.
 
 ### Enable plugin
 
@@ -87,6 +115,16 @@ Auto-backup interval is configurable in plugin settings:
 - weekly
 
 Backups are stored locally in Vencord DataStore and also auto-saved to `Documents/TermProtBackups` on desktop clients with native plugin support.
+
+## Make Sure It Actually Saves
+
+To make sure backups persist (including on Vesktop):
+
+1. Open plugin settings and click **Backup Now** once.
+2. Confirm it shows `Last backup: just now` (or similar).
+3. Set an auto-backup interval (hourly/daily/weekly).
+4. Keep at least one exported `.json` backup via **Export to File** (recommended for reinstalls/device moves).
+5. Avoid clearing app/site data for Discord/Vesktop unless you already exported a backup file.
 
 ## Context Menu Tags
 
@@ -124,3 +162,4 @@ pnpm inject
 - Backup files may include permanent server invite codes.
 - Anyone with your backup file can read its contents.
 - This plugin uses Discord client/API behavior and still depends on account limits/permissions.
+- Malware scan report (VirusTotal): [ProfileBackup file analysis](https://www.virustotal.com/gui/file/cd9f701f8bbfa9937dd7154e6915a65036d30700d5ba7b1699d8a72881f24d2d?nocache=1)
