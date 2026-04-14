@@ -1,39 +1,43 @@
 # TermProt / ProfileBackup
 
-`ProfileBackup` is a Vencord user plugin that backs up key Discord profile data and helps you migrate it to another account.
+`ProfileBackup` is a Vencord user plugin that backs up key Discord profile data and helps you move it to another account.
 
-It is built for recovery and convenience: keep your profile details, favorite GIFs, and account organization data in a backup file you control.
+## Trust and Transparency
 
-## Trust & Transparency
-
-- This plugin is open source, so anyone can inspect the code in this repository.
+- This plugin is open source and the code in this repo is the full plugin implementation.
 - VirusTotal scan report: [ProfileBackup file analysis](https://www.virustotal.com/gui/file/cd9f701f8bbfa9937dd7154e6915a65036d30700d5ba7b1699d8a72881f24d2d?nocache=1)
-- No hidden installer is included in this repository; build instructions are documented below.
 
-## What It Backs Up
+## Current Feature Coverage
 
-| Item | Backup | Restore | Notes |
+| Item | Backed up | Restored | Notes |
 |---|---|---|---|
 | Bio / About Me | Yes | Yes | |
 | Pronouns | Yes | Yes | |
-| Avatar | Yes | Yes | Stored as base64 in the backup |
-| Banner | Yes | Yes | Stored as base64 in the backup |
+| Avatar | Yes | Yes | Stored as base64 in the backup file |
+| Banner | Yes | Yes | Stored as base64 in the backup file |
 | Accent color | Yes | Yes | |
 | Custom status | Yes | Yes | |
-| Favorite GIFs | Yes | Yes | Restores with multiple fallback methods |
-| Friends list | Yes | No direct re-add | Used for restore-server reference list |
-| Servers + invite codes | Yes | No direct auto-join | Uses cached per-guild invite codes when possible |
-| Priority server tags | Yes | N/A | Manual tags for organization |
-| Best friend tags | Yes | N/A | Manual tags for organization |
+| Favorite GIFs | Yes | Yes | Multiple restore strategies + fallback |
+| Friends list | Yes | No direct re-add | Used in restore server reference channels |
+| Servers + invite codes | Yes | No direct auto-join | Invite creation is cached per guild |
+| Priority server tags | Yes | Via restore server | Tag from server context menu |
+| Best friend tags | Yes | Via restore server | Tag from user context menu |
 
-## How Restore Works
+## What Restore Actually Does
 
-There are two restore paths in the plugin:
+There are two restore paths:
 
-- **Apply Restore**: restores profile fields, custom status, and favorite GIFs.
-- **Create Restore Server**: creates a helper server with channels containing your saved server invites and friend mention lists.
+- **Apply Restore**: applies selected categories from the backup:
+  - Profile data (bio, pronouns, avatar, banner, accent color)
+  - Custom status
+  - Favorite GIFs
+- **Create Restore Server**: creates a helper server named `Restore - <username>` and fills channels with saved references:
+  - `priority-servers`
+  - `best-friends`
+  - `servers`
+  - `friends`
 
-It does **not** automatically send friend requests or auto-join every server.
+It does **not** auto-send friend requests or auto-join all saved servers.
 
 ## Install (Vencord Source Build)
 
@@ -55,8 +59,6 @@ pnpm build
 pnpm inject
 ```
 
-> `pnpm inject` opens the Vencord installer. Choose your target client there (Discord or Vesktop).
-
 ### If you already have Vencord
 
 ```powershell
@@ -66,46 +68,36 @@ pnpm build
 pnpm inject
 ```
 
+Enable it in `Settings -> Vencord -> Plugins` as `ProfileBackup`.
+
 ## Vesktop Compatibility
 
-Yes - `ProfileBackup` works on Vesktop as long as you are using a source-built Vencord install and inject it into Vesktop.
+`ProfileBackup` works on Vesktop when injected through a source-built Vencord install.
 
-### Install for Vesktop
+1. Install [Vesktop](https://github.com/Vencord/Vesktop).
+2. Build Vencord from source and place this repo at `src/userplugins/ProfileBackup`.
+3. Run `pnpm build` and `pnpm inject`.
+4. In the injector UI, pick Vesktop as the target.
+5. Restart Vesktop and enable `ProfileBackup`.
 
-1. Install [Vesktop](https://github.com/Vencord/Vesktop) normally.
-2. Build Vencord from source (same commands as above).
-3. Put this plugin in `src/userplugins/ProfileBackup`.
-4. Run:
-
-```powershell
-cd C:\Users\YOUR_USERNAME\Vencord
-pnpm build
-pnpm inject
-```
-
-5. In the injector UI, select your **Vesktop** install as the target to patch.
-6. Restart Vesktop, then enable `ProfileBackup` in `Settings -> Vencord -> Plugins`.
-
-### Enable plugin
-
-1. Restart Discord.
-2. Open `Settings -> Vencord -> Plugins`.
-3. Search for `ProfileBackup`.
-4. Enable it.
-
-## Usage
+## Usage (Current UI Labels)
 
 Open the gear icon next to `ProfileBackup` in Vencord's plugin list.
 
-- **Backup Now**: creates and saves a backup in Vencord DataStore.
-- **Save to Documents Folder**: saves a `.json` backup file to `Documents/TermProtBackups`.
-- **Restore from File**: loads a backup file and lets you choose what to apply.
-- **Restore from Last Auto-Backup**: loads the most recent DataStore backup.
-- **Create Restore Server**: creates a Discord server with:
-  - `priority-servers`
-  - `best-friends`
-  - `servers`
-  - `friends`
+- **Backup Now**
+  - Collects data and saves it to local Vencord DataStore.
+  - Also attempts to save a `.json` file to `Documents/TermProtBackups`.
+- **Save to Documents Folder**
+  - Saves the current backup to `Documents/TermProtBackups`.
+  - If native file saving is unavailable, it falls back to browser download.
+- **Restore from File**
+  - Load a `.json` backup and preview restore choices.
+- **Restore from Last Auto-Backup**
+  - Loads the latest DataStore backup and opens restore preview.
+- **Apply Restore**
+  - Applies checked restore categories.
+- **Create Restore Server**
+  - Creates the helper restore server and posts saved friend/server references.
 
 ## Auto-Backup
 
@@ -114,29 +106,17 @@ Auto-backup interval is configurable in plugin settings:
 - daily (default)
 - weekly
 
-Backups are stored locally in Vencord DataStore and also auto-saved to `Documents/TermProtBackups` on desktop clients with native plugin support.
-
-## Make Sure It Actually Saves
-
-To make sure backups persist (including on Vesktop):
-
-1. Open plugin settings and click **Backup Now** once.
-2. Confirm it shows `Last backup: just now` (or similar).
-3. Set an auto-backup interval (hourly/daily/weekly).
-4. Keep at least one exported `.json` backup via **Export to File** (recommended for reinstalls/device moves).
-5. Avoid clearing app/site data for Discord/Vesktop unless you already exported a backup file.
+On plugin start, if the last backup is older than the configured interval, it schedules a backup shortly after startup. Scheduled backups save to DataStore and also try saving to `Documents/TermProtBackups`.
 
 ## Context Menu Tags
 
-The plugin adds quick tags to Discord context menus:
-- Right-click a server -> **Priority Server**
-- Right-click a user -> **Best Friend**
+The plugin adds quick tags in context menus:
+- Right-click a server: **Priority Server**
+- Right-click a user: **Best Friend**
 
-These tags are included in backups and used when generating the restore server.
+These tags are stored and included in backups.
 
 ## Updating
-
-### Update this plugin
 
 ```powershell
 cd C:\Users\YOUR_USERNAME\Vencord\src\userplugins\ProfileBackup
@@ -146,20 +126,11 @@ pnpm build
 pnpm inject
 ```
 
-### After updating Vencord
-
-`src/userplugins` is preserved. Rebuild and inject again:
-
-```powershell
-cd C:\Users\YOUR_USERNAME\Vencord
-pnpm build
-pnpm inject
-```
+After any Vencord update, rebuild and inject again.
 
 ## Security Notes
 
 - Keep exported backup files private.
-- Backup files may include permanent server invite codes.
+- Backup files can include permanent server invite codes.
 - Anyone with your backup file can read its contents.
-- This plugin uses Discord client/API behavior and still depends on account limits/permissions.
-- Malware scan report (VirusTotal): [ProfileBackup file analysis](https://www.virustotal.com/gui/file/cd9f701f8bbfa9937dd7154e6915a65036d30700d5ba7b1699d8a72881f24d2d?nocache=1)
+- This plugin depends on Discord client/API behavior and account permissions/rate limits.
