@@ -1,6 +1,6 @@
 import { Forms, Button, useState, useEffect, useCallback } from "@webpack/common";
 
-import { collectBackup, saveBackupToDataStore, loadBackupFromDataStore, getLastBackupTime, downloadBackupAsFile } from "../backup";
+import { collectBackup, saveBackupToDataStore, loadBackupFromDataStore, getLastBackupTime, downloadBackupAsFile, saveBackupToDocumentsFolder } from "../backup";
 import { parseBackupFile, restoreFromBackup, restoreViaDiscordServer } from "../restore";
 import { ProfileBackup, RestoreOptions, RestoreResult, DiscordServerRestoreResult } from "../types";
 
@@ -54,9 +54,14 @@ function BackupSection() {
         try {
             const backup = await collectBackup(setStatus);
             await saveBackupToDataStore(backup);
+            try {
+                await saveBackupToDocumentsFolder(backup);
+            } catch (e: any) {
+                console.warn("[ProfileBackup] Could not auto-save backup to Documents folder", e);
+            }
             const now = Date.now();
             setLastBackup(now);
-            setStatus("Backup saved to local storage!");
+            setStatus("Backup saved to local storage and Documents/TermProtBackups.");
         } catch (e: any) {
             setStatus(`Backup failed: ${e.message}`);
         }
@@ -65,7 +70,7 @@ function BackupSection() {
 
     const handleExportFile = useCallback(async () => {
         setIsRunning(true);
-        setStatus("Preparing export...");
+        setStatus("Saving backup to Documents/TermProtBackups...");
         try {
             let backup = await loadBackupFromDataStore();
             if (!backup) {
@@ -74,8 +79,13 @@ function BackupSection() {
                 await saveBackupToDataStore(backup);
                 setLastBackup(Date.now());
             }
-            downloadBackupAsFile(backup);
-            setStatus("File downloaded!");
+            try {
+                await saveBackupToDocumentsFolder(backup);
+                setStatus("Backup saved to Documents/TermProtBackups.");
+            } catch {
+                downloadBackupAsFile(backup);
+                setStatus("Native save unavailable, downloaded backup file instead.");
+            }
         } catch (e: any) {
             setStatus(`Export failed: ${e.message}`);
         }
@@ -104,7 +114,7 @@ function BackupSection() {
                     size={Button.Sizes.SMALL}
                     look={Button.Looks.OUTLINED}
                 >
-                    Export to File
+                    Save to Documents Folder
                 </Button>
             </div>
             {status && (

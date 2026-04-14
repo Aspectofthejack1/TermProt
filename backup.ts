@@ -16,6 +16,7 @@ const DATASTORE_PRIORITY_GUILDS_KEY = "ProfileBackup_priorityGuildIds";
 const DATASTORE_BEST_FRIENDS_KEY = "ProfileBackup_bestFriendIds";
 const LOG_PREFIX = "[ProfileBackup]";
 const URL_RE = /^https?:\/\//i;
+const DOCUMENTS_BACKUP_PREFIX = "termprot-backup";
 
 async function fetchImageAsBase64(url: string): Promise<string | null> {
     try {
@@ -449,6 +450,33 @@ export async function loadBackupFromDataStore(): Promise<ProfileBackup | null> {
 
 export async function getLastBackupTime(): Promise<number | null> {
     return await DataStore.get(DATASTORE_TIMESTAMP_KEY) ?? null;
+}
+
+function getBackupFileDateStamp(date = new Date()): string {
+    const pad = (value: number) => value.toString().padStart(2, "0");
+    const y = date.getFullYear();
+    const m = pad(date.getMonth() + 1);
+    const d = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const mm = pad(date.getMinutes());
+    const ss = pad(date.getSeconds());
+    return `${y}-${m}-${d}_${hh}-${mm}-${ss}`;
+}
+
+function getDocumentsBackupFilename(backup: ProfileBackup): string {
+    const user = backup.sourceUser.username || "user";
+    return `${DOCUMENTS_BACKUP_PREFIX}-${user}-${getBackupFileDateStamp()}.json`;
+}
+
+export async function saveBackupToDocumentsFolder(backup: ProfileBackup): Promise<string> {
+    const pluginNative = (globalThis as any)?.VencordNative?.pluginHelpers?.ProfileBackup;
+    if (!pluginNative?.saveBackupToDocuments) {
+        throw new Error("Native backup writer is unavailable in this client.");
+    }
+
+    const json = JSON.stringify(backup, null, 2);
+    const fileName = getDocumentsBackupFilename(backup);
+    return await pluginNative.saveBackupToDocuments(json, fileName);
 }
 
 export function downloadBackupAsFile(backup: ProfileBackup): void {

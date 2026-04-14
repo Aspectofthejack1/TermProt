@@ -70,7 +70,7 @@ pnpm inject
 Open the gear icon next to `ProfileBackup` in Vencord's plugin list.
 
 - **Backup Now**: creates and saves a backup in Vencord DataStore.
-- **Export to File**: downloads a `.json` backup file.
+- **Save to Documents Folder**: saves a `.json` backup file to `Documents/TermProtBackups`.
 - **Restore from File**: loads a backup file and lets you choose what to apply.
 - **Restore from Last Auto-Backup**: loads the most recent DataStore backup.
 - **Create Restore Server**: creates a Discord server with:
@@ -86,7 +86,7 @@ Auto-backup interval is configurable in plugin settings:
 - daily (default)
 - weekly
 
-Backups are stored locally in Vencord DataStore. Export to a file regularly if you want off-device protection.
+Backups are stored locally in Vencord DataStore and also auto-saved to `Documents/TermProtBackups` on desktop clients with native plugin support.
 
 ## Context Menu Tags
 

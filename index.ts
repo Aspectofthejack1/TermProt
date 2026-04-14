@@ -6,6 +6,7 @@ import { Menu, React, showToast, Toasts } from "@webpack/common";
 import {
     collectBackup,
     saveBackupToDataStore,
+    saveBackupToDocumentsFolder,
     getLastBackupTime,
     togglePriorityGuildId,
     toggleBestFriendId,
@@ -61,6 +62,12 @@ async function runAutoBackup() {
     try {
         const backup = await collectBackup();
         await saveBackupToDataStore(backup);
+        try {
+            const savedPath = await saveBackupToDocumentsFolder(backup);
+            console.log("[ProfileBackup] Auto-backup also saved to", savedPath);
+        } catch (e) {
+            console.warn("[ProfileBackup] Auto-backup saved to DataStore only (Documents save failed):", e);
+        }
         console.log("[ProfileBackup] Auto-backup completed at", new Date().toISOString());
     } catch (e) {
         console.error("[ProfileBackup] Auto-backup failed:", e);
