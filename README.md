@@ -70,15 +70,43 @@ pnpm inject
 
 Enable it in `Settings -> Vencord -> Plugins` as `ProfileBackup`.
 
-## Vesktop Compatibility
+> **Vesktop users:** the `pnpm inject` step above patches the **Discord desktop app** only. Vesktop bundles its own Vencord and is set up a different way — **do not run `pnpm inject`**. Follow [Using ProfileBackup on Vesktop](#using-profilebackup-on-vesktop) instead.
 
-`ProfileBackup` works on Vesktop when injected through a source-built Vencord install.
+## Using ProfileBackup on Vesktop
 
-1. Install [Vesktop](https://github.com/Vencord/Vesktop).
-2. Build Vencord from source and place this repo at `src/userplugins/ProfileBackup`.
-3. Run `pnpm build` and `pnpm inject`.
-4. In the injector UI, pick Vesktop as the target.
-5. Restart Vesktop and enable `ProfileBackup`.
+[Vesktop](https://github.com/Vencord/Vesktop) ships with its own copy of Vencord baked into the app, so it is **not** patched with the Vencord installer. Instead, you point Vesktop at a Vencord build you compiled from source (which includes `ProfileBackup`).
+
+> **Do not use `pnpm inject` or the installer's "Custom Location" for Vesktop.** The installer only recognizes a real Discord install (it looks for Discord-only files like `resources/build_info.json`). Pointing it at your Vesktop folder — e.g. `...\AppData\Local\vesktop` — will fail with `ERROR Invalid Discord install!` even though that path is correct. That is expected; use the steps below instead.
+
+### Steps
+
+1. Install [Vesktop](https://github.com/Vencord/Vesktop) and launch it at least once.
+2. Clone Vencord from source and add this repo as a userplugin:
+   ```powershell
+   cd ~
+   git clone https://github.com/Vendicated/Vencord.git
+   cd Vencord
+   npm install -g pnpm
+   pnpm install
+   git clone https://github.com/Aspectofthejack1/TermProt.git src/userplugins/ProfileBackup
+   pnpm build
+   ```
+   `pnpm build` writes the compiled Vencord (with `ProfileBackup` bundled in) to the `dist` folder inside your `Vencord` directory. Note that full path — you need it in the next step.
+3. In Vesktop, open **Settings**, scroll to **"Vencord Location"**, click **Change**, and select your `Vencord\dist` folder (e.g. `C:\Users\YOUR_USERNAME\Vencord\dist`).
+   - Pick the **`dist`** folder — not the Vesktop install folder, and not this `ProfileBackup` folder.
+4. **Fully quit and restart Vesktop.** Closing to the tray is not enough — right-click the Vesktop tray icon and choose **Quit**, then reopen it.
+5. Enable it in `Settings -> Vencord -> Plugins` as `ProfileBackup`.
+
+### Updating on Vesktop
+
+```powershell
+cd C:\Users\YOUR_USERNAME\Vencord\src\userplugins\ProfileBackup
+git pull
+cd C:\Users\YOUR_USERNAME\Vencord
+pnpm build
+```
+
+Then fully quit and reopen Vesktop. You do **not** re-run `pnpm inject` — as long as "Vencord Location" still points at your `dist` folder, Vesktop loads the fresh build on restart.
 
 ## Usage (Current UI Labels)
 
@@ -116,7 +144,7 @@ The plugin adds quick tags in context menus:
 
 These tags are stored and included in backups.
 
-## Updating
+## Updating (Discord Desktop)
 
 ```powershell
 cd C:\Users\YOUR_USERNAME\Vencord\src\userplugins\ProfileBackup
@@ -127,6 +155,8 @@ pnpm inject
 ```
 
 After any Vencord update, rebuild and inject again.
+
+> On **Vesktop**, update with [Updating on Vesktop](#updating-on-vesktop) instead — rebuild and restart, no `pnpm inject`.
 
 ## Security Notes
 
